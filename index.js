@@ -1,8 +1,8 @@
 const { makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const qrcode = require('qrcode-terminal');
 
 const DEVELOPER_NUMBER = "201552943986@s.whatsapp.net";
+const TARGET_PHONE = "201552943986"; // رقمك بالصيغة الدولية لتوليد الكود له
 
 let groupSettings = {
     welcome: true,       
@@ -23,19 +23,28 @@ async function startBot() {
 
     sock.ev.on('creds.update', saveCreds);
 
-    // استقبال وطباعة الرمز (QR Code) بالصيغة الحديثة
-    sock.ev.on('connection.update', (update) => {
-        const { connection, qr } = update;
+    // توليد رمز الاقتران (Pairing Code) وطباعته بوضوح في سجلات Railway
+    sock.ev.on('connection.update', async (update) => {
+        const { connection } = update;
         
-        if (qr) {
-            console.log("\n=========================================");
-            console.log("📸 امسح الباركود التالي برقمك من واتساب:");
-            console.log("=========================================\n");
-            qrcode.generate(qr, { small: true });
+        if (connection === 'open') {
+            console.log('✅ تم اتصال بوت (الروسي) بنجاح!');
         }
 
-        if (connection === 'open') {
-            console.log('✅ تم اتصال بوت (الروسي) بنجاح وهو جاهز للعمل!');
+        // إذا لم يكن الرقم مقترناً بعد، اطلب الرمز فور بدء الاتصال
+        if (!sock.authState.creds.registered && (connection === 'connecting' || !connection)) {
+            setTimeout(async () => {
+                try {
+                    console.log('⏳ جاري طلب رمز الاقتران لرقمك من خوادم واتساب...');
+                    let code = await sock.requestPairingCode(TARGET_PHONE);
+                    console.log(`\n=========================================`);
+                    console.log(`🔑 رمز الاقتران الخاص بك هو:  ${code}  `);
+                    console.log(`=========================================\n`);
+                    console.log('اكتب هذا الرمز في واتساب فوراً قبل انتهاء صلاحيته!\n');
+                } catch (err) {
+                    console.log("❌ تعذر طلب الكود في هذه المحاولة، جاري إعادة المحاولة:", err?.message || err);
+                }
+            }, 5000);
         }
     });
 
