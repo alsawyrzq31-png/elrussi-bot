@@ -1,5 +1,6 @@
 const { makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const pino = require('pino');
+const qrcode = require('qrcode-terminal');
 
 const DEVELOPER_NUMBER = "201552943986@s.whatsapp.net";
 
@@ -17,12 +18,28 @@ async function startBot() {
     
     const sock = makeWASocket({
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: true,
         auth: state
     });
 
     sock.ev.on('creds.update', saveCreds);
 
+    // استقبال وطباعة الرمز (QR Code) بالصيغة الحديثة
+    sock.ev.on('connection.update', (update) => {
+        const { connection, qr } = update;
+        
+        if (qr) {
+            console.log("\n=========================================");
+            console.log("📸 امسح الباركود التالي برقمك من واتساب:");
+            console.log("=========================================\n");
+            qrcode.generate(qr, { small: true });
+        }
+
+        if (connection === 'open') {
+            console.log('✅ تم اتصال بوت (الروسي) بنجاح وهو جاهز للعمل!');
+        }
+    });
+
+    // الترحيب بالأعضاء الجدد
     sock.ev.on('group-participants.update', async (update) => {
         if (groupSettings.welcome && update.action === 'add') {
             for (let num of update.participants) {
@@ -34,6 +51,7 @@ async function startBot() {
         }
     });
 
+    // معالجة الأوامر والتحكم
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
         if (!m.message || m.key.fromMe) return;
